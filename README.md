@@ -1,7 +1,6 @@
 # About Haven
 
-Haven is for people who need a way to protect their personal spaces and possessions without compromising their own privacy. It is an Android application that leverages on-device sensors to provide monitoring and protection of physical spaces. Haven turns any Android phone into a motion, sound, vibration and light detector, watching for unexpected guests and 
-unwanted intruders. We designed Haven for investigative journalists, human rights defenders, and people at risk of forced disappearance to create a new kind of herd immunity. By combining the array of sensors found in any smartphone, with the world's most secure communications technologies, like Signal and Tor, Haven prevents the worst kind of people from silencing citizens without getting caught in the act.
+Haven is for people who need a way to protect their personal spaces and possessions without compromising their own privacy. It is an Android application that leverages on-device sensors to provide monitoring and protection of physical spaces. Haven turns any Android phone into a motion, sound, vibration and light detector, watching for unexpected guests and unwanted intruders. We designed Haven for investigative journalists, human rights defenders, and people at risk of forced disappearance to create a new kind of herd immunity. By combining the array of sensors found in any smartphone, with the world's most secure communications technologies, like Signal and Tor, Haven prevents the worst kind of people from silencing citizens without getting caught in the act.
 
 <img src="https://raw.githubusercontent.com/guardianproject/haven/master/fastlane/android/metadata/en-US/images/phoneScreenshots/havenob1.png" width="25%"> 
 <img src="https://raw.githubusercontent.com/guardianproject/haven/master/fastlane/android/metadata/en-US/images/phoneScreenshots/havenob2.png" width="25%"> 
@@ -11,7 +10,7 @@ View our full [Haven App Overview](https://guardianproject.github.io/haven/docs/
 
 ## Announcement and Public Beta
 
-We are announcing Haven today, as an open-source project, along a public beta release of the app. We are looking for contributors who understand that physical security is as important as digital, and who have an understanding and compassion for the kind of threats faced by the users and communities we want to support. We also think it is really cool, cutting edge, and making use of encrypted messaging and onion routing in whole new ways. We believe Haven points the way to a more sophisticated approach to securing communication within networks of things and home automation system.
+We are announcing Haven today, as an open-source project, along with a public beta release of the app. We are looking for contributors who understand that physical security is as important as digital, and who have an understanding and compassion for the kind of threats faced by the users and communities we want to support. We also think it is really cool, cutting edge, and making use of encrypted messaging and onion routing in whole new ways. We believe Haven points the way to a more sophisticated approach to securing communication within networks of things and home automation system.
 
 Learn more about the story of this project at the links below:
 
@@ -34,11 +33,11 @@ Haven only saves images and sound when triggered by motion or volume, and stores
 <img src="https://raw.githubusercontent.com/guardianproject/haven/master/fastlane/android/metadata/en-US/images/phoneScreenshots/haven-event-media.png" width="25%"> 
 <img src="https://raw.githubusercontent.com/guardianproject/haven/master/fastlane/android/metadata/en-US/images/phoneScreenshots/haven-event-list.png" width="25%"> 
 
-The follow sensors are monitored for a measurable change, and then recorded to an event log on the device:
+The following sensors are monitored for a measurable change, and then recorded to an event log on the device:
 
 -   **Accelerometer**: phone's motion and vibration
 -   **Camera**: motion in the phone's visible surroundings from front or back camera
--   **Microphone**: noises in the enviroment
+-   **Microphone**: noises in the environment
 -   **Light**: change in light from ambient light sensor
 -   **Power**: detect device being unplugged or power loss  
 
@@ -57,11 +56,11 @@ You can currently get the Haven BETA release in one of three ways:
 
 or add this repository manually in F-Droid's Settings->Repositories: [https://guardianproject.github.io/haven-nightly/fdroid/repo/](https://guardianproject.github.io/haven-nightly/fdroid/repo/)
 
-* Grab the APK files from the [Github releases page](https://github.com/guardianproject/haven/releases)
+* Grab the APK files from the [GitHub releases page](https://github.com/guardianproject/haven/releases)
 
 You can, of course, build the app yourself, from source.
 
-If you are an Android developer, you can learn more about how you can make use of F-Droid in your development workflow, for nightly builds, testing, reproducability and more here: [F-Droid Documentation](https://f-droid.org/en/docs/)
+If you are an Android developer, you can learn more about how you can make use of F-Droid in your development workflow, for nightly builds, testing, reproducibility and more here: [F-Droid Documentation](https://f-droid.org/en/docs/)
 
 ## Why no iPhone Support?
 
@@ -71,7 +70,7 @@ So, no, iPhone users we didn't forget about you, and hope you'll pick up an Andr
 
 ## Usage
 
-Haven is meant to provide an easy onboarding experience, that walks through user through configuring the sensors on their device to best detect intrusions into their environment. The current implementation has some of this implemented, but we are looking to improve this user experience dramatically.
+Haven is meant to provide an easy onboarding experience, that walks users through configuring the sensors on their device to best detect intrusions into their environment. The current implementation has some of this implemented, but we are looking to improve this user experience dramatically.
 
 ### Main view
 
@@ -79,20 +78,22 @@ Application's main view allows the user to set which sensors to use and the corr
 
 ### Notifications
 
-When one of the sensors is triggered (reaches the sensibility threshold) a notifications is sent through the following channels (if enabled).
+When one of the sensors is triggered (reaches the configured sensitivity threshold), notifications are sent through the following channels (if enabled):
 
 - SMS: a message is sent to the number specified when monitoring started
 - Signal: if configured, can send end-to-end encryption notifications via Signal
 
-Notifications are sent through a service running in background that is defined in class `MonitorService`.
+Note that it's not necessary to install the Signal app on the device that runs Haven. Doing so may invalidate the app's previous Signal registration and safety numbers. Haven uses APIs to communicate via Signal.
+
+Notifications are sent through a service running in the background that is defined in class `MonitorService`.
 
 ### Remote Access
 
-All event logs and captured media can be remotely accessed through a [Tor Onion Service](https://www.torproject.org/docs/onion-services). Haven must be configured as an Onion Service, and requires the device to also have [Orbot: Tor for Android](https://guardianproject.info/apps/orbot) installed and running. 
+All event logs and captured media can be remotely accessed through a [Tor Onion Service](https://www.torproject.org/docs/onion-services). Haven must be configured as an Onion Service and requires the device to also have [Orbot: Tor for Android](https://guardianproject.info/apps/orbot) installed and running. 
 
 ## ATTRIBUTIONS
 
-This project contains source code or library dependencies from the follow projects:
+This project contains source code or library dependencies from the following projects:
 
 * SecureIt project available at: https://github.com/mziccard/secureit Copyright (c) 2014 Marco Ziccardi (Modified BSD)
 * libsignal-service-java from Open Whisper Systems: https://github.com/WhisperSystems/libsignal-service-java (GPLv3)

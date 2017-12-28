@@ -11,10 +11,13 @@ package org.havenapp.main.service;
 
 
 import android.annotation.SuppressLint;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.graphics.Color;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
@@ -25,12 +28,8 @@ import android.telephony.SmsManager;
 import android.text.TextUtils;
 import android.widget.Toast;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.StringTokenizer;
-
-import org.havenapp.main.MonitorActivity;
 import org.havenapp.main.HavenApp;
+import org.havenapp.main.MonitorActivity;
 import org.havenapp.main.PreferenceManager;
 import org.havenapp.main.R;
 import org.havenapp.main.model.Event;
@@ -38,7 +37,12 @@ import org.havenapp.main.model.EventTrigger;
 import org.havenapp.main.sensors.AccelerometerMonitor;
 import org.havenapp.main.sensors.AmbientLightMonitor;
 import org.havenapp.main.sensors.BarometerMonitor;
+import org.havenapp.main.sensors.BumpMonitor;
 import org.havenapp.main.sensors.MicrophoneMonitor;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.StringTokenizer;
 
 @SuppressLint("HandlerLeak")
 public class MonitorService extends Service {
@@ -51,7 +55,11 @@ public class MonitorService extends Service {
 	/**
 	 * To show a notification on service start
 	 */
-	private NotificationManager manager;
+	NotificationManager manager;
+    NotificationChannel mChannel;
+    final static String channelId = "monitor_id";
+    final static CharSequence channelName = "Haven notifications";
+    final static String channelDescription= "Important messages from Haven";
 
 	/**
 	* True only if service has been alerted by the accelerometer
@@ -73,6 +81,7 @@ public class MonitorService extends Service {
      * Sensor Monitors
      */
     AccelerometerMonitor mAccelManager = null;
+    BumpMonitor mBumpMonitor = null;
     MicrophoneMonitor mMicMonitor = null;
     BarometerMonitor mBaroMonitor = null;
     AmbientLightMonitor mLightMonitor = null;
@@ -121,6 +130,15 @@ public class MonitorService extends Service {
 
         manager = (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         mPrefs = new PreferenceManager(this);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            mChannel = new NotificationChannel(channelId, channelName,
+                    NotificationManager.IMPORTANCE_HIGH);
+            mChannel.setDescription(channelDescription);
+            mChannel.setLightColor(Color.RED);
+            mChannel.setImportance(NotificationManager.IMPORTANCE_MIN);
+            manager.createNotificationChannel(mChannel);
+        }
 
         startSensors();
 
@@ -184,7 +202,7 @@ public class MonitorService extends Service {
         CharSequence text = getText(R.string.secure_service_started);
 
 		NotificationCompat.Builder mBuilder =
-				new NotificationCompat.Builder(this)
+				new NotificationCompat.Builder(this, channelId)
 						.setSmallIcon(R.drawable.ic_stat_haven)
 						.setContentTitle(getString(R.string.app_name))
 						.setContentText(text);
@@ -192,6 +210,7 @@ public class MonitorService extends Service {
 		mBuilder.setPriority(NotificationCompat.PRIORITY_MIN);
         mBuilder.setContentIntent(resultPendingIntent);
         mBuilder.setWhen(System.currentTimeMillis());
+        mBuilder.setVisibility(NotificationCompat.VISIBILITY_SECRET);
 
 		startForeground(1, mBuilder.build());
 
@@ -209,9 +228,14 @@ public class MonitorService extends Service {
 
         if (mPrefs.getAccelerometerSensitivity() != PreferenceManager.OFF) {
             mAccelManager = new AccelerometerMonitor(this);
-            mBaroMonitor = new BarometerMonitor(this);
-            mLightMonitor = new AmbientLightMonitor(this);
+            if(Build.VERSION.SDK_INT>=18) {
+                mBumpMonitor = new BumpMonitor(this);
+            }
         }
+
+        //moving these out of the accelerometer pref, but need to enable off prefs for them too
+        mBaroMonitor = new BarometerMonitor(this);
+        mLightMonitor = new AmbientLightMonitor(this);
 
         if (mPrefs.getMicrophoneSensitivity() != PreferenceManager.OFF)
             mMicMonitor = new MicrophoneMonitor(this);
@@ -222,12 +246,19 @@ public class MonitorService extends Service {
     private void stopSensors ()
     {
         mIsRunning = false;
-
+        //this will never be false:
+        // -you can't use ==, != for string comparisons, use equals() instead
+        // -Value is never set to OFF in the first place
         if (mPrefs.getAccelerometerSensitivity() != PreferenceManager.OFF) {
             mAccelManager.stop(this);
-            mBaroMonitor.stop(this);
-            mLightMonitor.stop(this);
+            if(Build.VERSION.SDK_INT>=18) {
+                mBumpMonitor.stop(this);
+            }
         }
+
+        //moving these out of the accelerometer pref, but need to enable off prefs for them too
+        mBaroMonitor.stop(this);
+        mLightMonitor.stop(this);
 
         if (mPrefs.getMicrophoneSensitivity() != PreferenceManager.OFF)
             mMicMonitor.stop(this);
@@ -265,7 +296,8 @@ public class MonitorService extends Service {
         StringBuffer alertMessage = new StringBuffer();
         alertMessage.append(getString(R.string.intrusion_detected,eventTrigger.getStringType(this)));
 
-        Toast.makeText(this,alertMessage.toString(),Toast.LENGTH_SHORT).show();
+  // removing toast, but we should have some visual feedback for testing on the monitor screen
+//        Toast.makeText(this,alertMessage.toString(),Toast.LENGTH_SHORT).show();
 
         if (mPrefs.getSignalUsername() != null)
         {

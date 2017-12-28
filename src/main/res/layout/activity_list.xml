@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="true"
-    tools:context="info.guardianproject.phoneypot.org.havenapp.main.ListActivity">
+    tools:context="org.havenapp.main.ListActivity">
 
     <android.support.design.widget.AppBarLayout
         android:layout_width="match_parent"
@@ -57,7 +57,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_margin="@dimen/fab_margin"
-        android:src="@drawable/ic_play_arrow_white_48dp"
+        app:srcCompat="@drawable/ic_play_arrow_white_48dp"
         android:tint="@android:color/white" />
 
 </android.support.design.widget.CoordinatorLayout>
