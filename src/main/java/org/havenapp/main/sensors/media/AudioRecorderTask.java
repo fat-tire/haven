@@ -15,9 +15,13 @@ import android.media.MediaRecorder;
 import android.os.Environment;
 import android.util.Log;
 
-import java.io.File;
-
 import org.havenapp.main.PreferenceManager;
+import org.havenapp.main.Utils;
+
+import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 public class AudioRecorderTask extends Thread {
 	
@@ -67,9 +71,10 @@ public class AudioRecorderTask extends Thread {
 		this.prefs = new PreferenceManager(context);
 		Log.i("AudioRecorderTask", "Created recorder");
 
-        File fileFolder = new File(Environment.getExternalStorageDirectory().getPath(),prefs.getAudioPath());
+        File fileFolder = new File(Environment.getExternalStorageDirectory().getPath(),prefs.getDefaultMediaStoragePath());
         fileFolder.mkdirs();
-        audioPath = new File(fileFolder,new java.util.Date().getTime() + ".m4a");
+        audioPath = new File(fileFolder,new SimpleDateFormat(Utils.DATE_TIME_PATTERN,
+				Locale.getDefault()).format(new Date()) + ".m4a");
 
     }
 	

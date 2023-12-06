@@ -17,17 +17,23 @@
 
 package org.havenapp.main;
 
-import android.support.multidex.MultiDexApplication;
-import android.support.v7.app.AppCompatDelegate;
-import android.text.TextUtils;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.multidex.MultiDexApplication;
+
+import com.evernote.android.job.JobManager;
 import com.facebook.drawee.backends.pipeline.Fresco;
-import com.orm.SugarContext;
+import com.facebook.imagepipeline.core.ImagePipelineConfig;
+import com.facebook.imagepipeline.decoder.SimpleProgressiveJpegConfig;
+import com.facebook.imagepipeline.nativecode.ImagePipelineNativeLoader;
+
+import org.havenapp.main.database.HavenEventDB;
+import org.havenapp.main.service.HavenJobCreator;
+import org.havenapp.main.service.WebServer;
 
 import java.io.IOException;
-
-import org.havenapp.main.service.WebServer;
 
 public class HavenApp extends MultiDexApplication {
 
@@ -39,19 +45,44 @@ public class HavenApp extends MultiDexApplication {
 
     private PreferenceManager mPrefs = null;
 
+    private static HavenEventDB dataBaseInstance = null;
+
+    private static HavenApp havenApp;
+
     @Override
     public void onCreate() {
         super.onCreate();
 
         mPrefs = new PreferenceManager(this);
 
-        Fresco.initialize(this);
-        SugarContext.init(this);
+        ImagePipelineConfig.Builder b = ImagePipelineConfig.newBuilder(this);
+        ImagePipelineConfig config = b
+                .setProgressiveJpegConfig(new SimpleProgressiveJpegConfig())
+                .setResizeAndRotateEnabledForNetwork(true)
+                .setDownsampleEnabled(true)
+                .build();
+
+        Fresco.initialize(this,config);
+
+        try {
+            ImagePipelineNativeLoader.load();
+        } catch (UnsatisfiedLinkError e) {
+            Fresco.shutDown();
+            b.experiment().setNativeCodeDisabled(true);
+            config = b.build();
+            Fresco.initialize(this, config);
+            e.printStackTrace();
+        }
+
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
 
         if (mPrefs.getRemoteAccessActive())
             startServer();
 
+        havenApp = this;
+        dataBaseInstance = HavenEventDB.getDatabase(this);
+
+        JobManager.create(this).addJobCreator(new HavenJobCreator());
     }
 
 
@@ -59,10 +90,12 @@ public class HavenApp extends MultiDexApplication {
     {
         if (mOnionServer == null || (!mOnionServer.isAlive()))
         {
-            try {
-                mOnionServer = new WebServer(this, mPrefs.getRemoteAccessCredential());
-            } catch (IOException ioe) {
-                Log.e("OnioNServer", "unable to start onion server", ioe);
+            if ( mPrefs.getRemoteAccessCredential() != null) {
+                try {
+                    mOnionServer = new WebServer(this, mPrefs.getRemoteAccessCredential());
+                } catch (IOException ioe) {
+                    Log.e("OnioNServer", "unable to start onion server", ioe);
+                }
             }
         }
     }
@@ -73,5 +106,15 @@ public class HavenApp extends MultiDexApplication {
         {
             mOnionServer.stop();
         }
+    }
+
+    @NonNull
+    public static HavenApp getInstance() {
+        return havenApp;
+    }
+
+    @NonNull
+    public static HavenEventDB getDataBaseInstance() {
+        return dataBaseInstance;
     }
 }

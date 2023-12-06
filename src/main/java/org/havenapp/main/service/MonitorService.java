@@ -11,37 +11,46 @@ package org.havenapp.main.service;
 
 
 import android.annotation.SuppressLint;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.PowerManager;
-import android.support.v4.app.NotificationCompat;
 import android.telephony.SmsManager;
 import android.text.TextUtils;
+
+import androidx.annotation.RequiresApi;
+import androidx.core.app.NotificationCompat;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import org.havenapp.main.HavenApp;
 import org.havenapp.main.MonitorActivity;
 import org.havenapp.main.PreferenceManager;
 import org.havenapp.main.R;
+import org.havenapp.main.database.HavenEventDB;
 import org.havenapp.main.model.Event;
 import org.havenapp.main.model.EventTrigger;
+import org.havenapp.main.resources.ResourceManager;
 import org.havenapp.main.sensors.AccelerometerMonitor;
 import org.havenapp.main.sensors.AmbientLightMonitor;
 import org.havenapp.main.sensors.BarometerMonitor;
 import org.havenapp.main.sensors.BumpMonitor;
 import org.havenapp.main.sensors.MicrophoneMonitor;
+import org.havenapp.main.sensors.PowerConnectionReceiver;
 
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.StringTokenizer;
+
+import androidx.annotation.RequiresApi;
+import androidx.core.app.NotificationCompat;
 
 @SuppressLint("HandlerLeak")
 public class MonitorService extends Service {
@@ -54,8 +63,6 @@ public class MonitorService extends Service {
     /**
      * To show a notification on service start
      */
-    private NotificationManager manager;
-    private NotificationChannel mChannel;
     private final static String channelId = "monitor_id";
     private final static CharSequence channelName = "Haven notifications";
     private final static String channelDescription= "Important messages from Haven";
@@ -74,7 +81,9 @@ public class MonitorService extends Service {
     private BarometerMonitor mBaroMonitor = null;
     private AmbientLightMonitor mLightMonitor = null;
 
-    private boolean mIsRunning = false;
+    private PowerConnectionReceiver mPowerReceiver = null;
+
+    private boolean mIsMonitoringActive = false;
 
     /**
      * Last Event instances
@@ -92,9 +101,14 @@ public class MonitorService extends Service {
     private class MessageHandler extends Handler {
 		@Override
 		public void handleMessage(Message msg) {
-			alert(msg.what,msg.getData().getString("path"));
+
+		    //only accept alert if monitor is running
+		    if (mIsMonitoringActive)
+		        alert(msg.what,msg.getData().getString(KEY_PATH));
 		}
 	}
+
+	public final static String KEY_PATH = "path";
 		
 	/**
 	 * Messenger interface used by clients to interact
@@ -121,26 +135,35 @@ public class MonitorService extends Service {
 
         mApp = (HavenApp)getApplication();
 
-        manager = (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         mPrefs = new PreferenceManager(this);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            mChannel = new NotificationChannel(channelId, channelName,
-                    NotificationManager.IMPORTANCE_HIGH);
-            mChannel.setDescription(channelDescription);
-            mChannel.setLightColor(Color.RED);
-            mChannel.setImportance(NotificationManager.IMPORTANCE_MIN);
-            manager.createNotificationChannel(mChannel);
+            setupNotificationChannel();
         }
 
         startSensors();
 
         showNotification();
 
+      //  startCamera();
+
         PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
-                "MyWakelockTag");
+        wakeLock = powerManager.newWakeLock(PowerManager.FULL_WAKE_LOCK,
+                "haven:MyWakelockTag");
         wakeLock.acquire();
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private void setupNotificationChannel ()
+    {
+        android.app.NotificationManager manager = (android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+        android.app.NotificationChannel channel;
+        channel = new android.app.NotificationChannel(channelId, channelName,
+                android.app.NotificationManager.IMPORTANCE_HIGH);
+        channel.setDescription(channelDescription);
+        channel.setLightColor(Color.RED);
+        channel.setImportance(android.app.NotificationManager.IMPORTANCE_MIN);
+        manager.createNotificationChannel(channel);
     }
 
     public static MonitorService getInstance ()
@@ -173,8 +196,7 @@ public class MonitorService extends Service {
     /**
      * Show a notification while this service is running.
      */
-    @SuppressWarnings("deprecation")
-	private void showNotification() {
+    private void showNotification() {
 
     	Intent toLaunch = new Intent(getApplicationContext(),
     	                                          MonitorActivity.class);
@@ -211,13 +233,16 @@ public class MonitorService extends Service {
 
     public boolean isRunning ()
     {
-        return mIsRunning;
+        return mIsMonitoringActive;
 
     }
 
     private void startSensors ()
     {
-        mIsRunning = true;
+        mIsMonitoringActive = true;
+
+        // set current event start date in prefs
+        mPrefs.setCurrentSession(new Date(System.currentTimeMillis()));
 
         if (!mPrefs.getAccelerometerSensitivity().equals(PreferenceManager.OFF)) {
             mAccelManager = new AccelerometerMonitor(this);
@@ -230,17 +255,30 @@ public class MonitorService extends Service {
         mBaroMonitor = new BarometerMonitor(this);
         mLightMonitor = new AmbientLightMonitor(this);
 
+        mPrefs.activateMonitorService(true);
+
+        if (mPrefs.getHeartbeatActive()){
+            SignalSender sender = SignalSender.getInstance(this, mPrefs.getSignalUsername());
+            sender.startHeartbeatTimer(mPrefs.getHeartbeatNotificationTimeMs());
+        }
+
         // && !mPrefs.getVideoMonitoringActive()
 
         if (!mPrefs.getMicrophoneSensitivity().equals(PreferenceManager.OFF))
             mMicMonitor = new MicrophoneMonitor(this);
 
+        mPowerReceiver = new PowerConnectionReceiver();
+        // register our power status receivers
+        IntentFilter powerConnectedFilter = new IntentFilter(Intent.ACTION_POWER_CONNECTED);
+        registerReceiver(mPowerReceiver, powerConnectedFilter);
 
+        IntentFilter powerDisconnectedFilter = new IntentFilter(Intent.ACTION_POWER_DISCONNECTED);
+        registerReceiver(mPowerReceiver, powerDisconnectedFilter);
     }
 
     private void stopSensors ()
     {
-        mIsRunning = false;
+        mIsMonitoringActive = false;
         //this will never be false:
         // -you can't use ==, != for string comparisons, use equals() instead
         // -Value is never set to OFF in the first place
@@ -259,19 +297,39 @@ public class MonitorService extends Service {
 
         if (!mPrefs.getMicrophoneSensitivity().equals(PreferenceManager.OFF))
             mMicMonitor.stop(this);
+
+        if (mPrefs.getMonitorServiceActive()) {
+            mPrefs.activateMonitorService(false);
+            if (mPrefs.getHeartbeatActive()) {
+                SignalSender sender = SignalSender.getInstance(this, mPrefs.getSignalUsername());
+                sender.stopHeartbeatTimer();
+            }
+        }
+        
+        unregisterReceiver(mPowerReceiver);
     }
 
     /**
     * Sends an alert according to type of connectivity
     */
-    public synchronized void alert(int alertType, String path) {
+    public void alert(int alertType, String value) {
 
         Date now = new Date();
         boolean doNotification = false;
 
+        //for the UI visual
+        Intent iEvent = new Intent("event");
+        iEvent.putExtra("type",alertType);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(iEvent);
+
+        if (TextUtils.isEmpty(value))
+            return;
+
         if (mLastEvent == null) {
             mLastEvent = new Event();
-            mLastEvent.save();
+            long eventId = HavenEventDB.getDatabase(getApplicationContext())
+                    .getEventDAO().insert(mLastEvent);
+            mLastEvent.setId(eventId);
             doNotification = true;
         }
         else if (mPrefs.getNotificationTimeMs() == 0)
@@ -283,19 +341,22 @@ public class MonitorService extends Service {
             //check if time window is within configured notification time window
             doNotification = ((now.getTime()-mLastNotification.getTime())>mPrefs.getNotificationTimeMs());
         }
-        else
+
+        if (doNotification)
         {
-            doNotification = true;
+            doNotification = !(mPrefs.getVideoMonitoringActive() && alertType == EventTrigger.CAMERA);
         }
 
         EventTrigger eventTrigger = new EventTrigger();
         eventTrigger.setType(alertType);
-        eventTrigger.setPath(path);
+        eventTrigger.setPath(value);
 
         mLastEvent.addEventTrigger(eventTrigger);
 
         //we don't need to resave the event, only the trigger
-        eventTrigger.save();
+        long eventTriggerId = HavenEventDB.getDatabase(getApplicationContext())
+                .getEventTriggerDAO().insert(eventTrigger);
+        eventTrigger.setId(eventTriggerId);
 
         if (doNotification) {
 
@@ -305,9 +366,10 @@ public class MonitorService extends Service {
              * number
              */
             StringBuilder alertMessage = new StringBuilder();
-            alertMessage.append(getString(R.string.intrusion_detected, eventTrigger.getStringType(this)));
+            alertMessage.append(getString(R.string.intrusion_detected,
+                    eventTrigger.getStringType(new ResourceManager(this))));
 
-            if (mPrefs.getSignalUsername() != null) {
+            if (mPrefs.isRemoteNotificationActive() && mPrefs.isSignalVerified()) {
                 //since this is a secure channel, we can add the Onion address
                 if (mPrefs.getRemoteAccessActive() && (!TextUtils.isEmpty(mPrefs.getRemoteAccessOnion()))) {
                     alertMessage.append(" http://").append(mPrefs.getRemoteAccessOnion())
@@ -316,7 +378,7 @@ public class MonitorService extends Service {
 
                 SignalSender sender = SignalSender.getInstance(this, mPrefs.getSignalUsername());
                 ArrayList<String> recips = new ArrayList<>();
-                StringTokenizer st = new StringTokenizer(mPrefs.getSmsNumber(), ",");
+                StringTokenizer st = new StringTokenizer(mPrefs.getRemotePhoneNumber(), ",");
                 while (st.hasMoreTokens())
                     recips.add(st.nextToken());
 
@@ -330,18 +392,13 @@ public class MonitorService extends Service {
                     attachment = eventTrigger.getPath();
                 }
 
-                sender.sendMessage(recips, alertMessage.toString(), attachment);
-            } else if (mPrefs.getSmsActivation()) {
-                SmsManager manager = SmsManager.getDefault();
-
-                StringTokenizer st = new StringTokenizer(mPrefs.getSmsNumber(), ",");
-                while (st.hasMoreTokens())
-                    manager.sendTextMessage(st.nextToken(), null, alertMessage.toString(), null, null);
-
+                sender.sendMessage(recips, alertMessage.toString(), attachment, null);
             }
         }
 
     }
+
+
 
 
 }

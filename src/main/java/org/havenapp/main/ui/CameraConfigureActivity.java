@@ -17,21 +17,28 @@
 package org.havenapp.main.ui;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.Toolbar;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.SeekBar;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import org.havenapp.main.PreferenceManager;
 import org.havenapp.main.R;
 
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import me.angrybyte.numberpicker.listener.OnValueChangeListener;
 import me.angrybyte.numberpicker.view.ActualNumberPicker;
+
 
 
 public class CameraConfigureActivity extends AppCompatActivity {
@@ -43,7 +50,7 @@ public class CameraConfigureActivity extends AppCompatActivity {
 
     private CameraFragment mFragment;
     private ActualNumberPicker mNumberTrigger;
-
+    private TextView mTxtStatus;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,6 +73,7 @@ public class CameraConfigureActivity extends AppCompatActivity {
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
 
         mFragment = (CameraFragment) getSupportFragmentManager().findFragmentById(R.id.fragment_camera);
+        mTxtStatus = findViewById(R.id.status);
 
         findViewById(R.id.btnCameraSwitch).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -77,13 +85,10 @@ public class CameraConfigureActivity extends AppCompatActivity {
         mNumberTrigger = findViewById(R.id.number_trigger_level);
         mNumberTrigger.setValue(mPrefManager.getCameraSensitivity());
 
-        mNumberTrigger.setListener(new OnValueChangeListener() {
-            @Override
-            public void onValueChanged(int oldValue, int newValue) {
-                mFragment.setMotionSensitivity(newValue);
-                mPrefManager.setCameraSensitivity(newValue);
-                setResult(RESULT_OK);
-            }
+        mNumberTrigger.setListener((oldValue, newValue) -> {
+            mFragment.setMotionSensitivity(newValue);
+            mPrefManager.setCameraSensitivity(newValue);
+            setResult(RESULT_OK);
         });
         mIsInitializedLayout = true;
     }
@@ -96,7 +101,7 @@ public class CameraConfigureActivity extends AppCompatActivity {
         else if (camera.equals(PreferenceManager.BACK))
             mPrefManager.setCamera(PreferenceManager.FRONT);
 
-        ((CameraFragment) getSupportFragmentManager().findFragmentById(R.id.fragment_camera)).resetCamera();
+        mFragment.updateCamera();
         setResult(RESULT_OK);
     }
 
@@ -126,6 +131,10 @@ public class CameraConfigureActivity extends AppCompatActivity {
     @Override
     public void onResume() {
         super.onResume();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction("event");
+        LocalBroadcastManager.getInstance(this).registerReceiver(receiver,filter );
+
     }
 
     @Override
@@ -163,5 +172,28 @@ public class CameraConfigureActivity extends AppCompatActivity {
             return false;
         }
     }
+
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
+
+    }
+
+    BroadcastReceiver receiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+
+            int eventType = intent.getIntExtra("type",-1);
+            boolean detected = intent.getBooleanExtra("detected",true);
+            int percChanged = intent.getIntExtra("changed",-1);
+
+            if (percChanged != -1)
+            {
+                mTxtStatus.setText(percChanged + "% motion detected");
+            }
+        }
+    };
 
 }

@@ -19,12 +19,20 @@
 package org.havenapp.main;
 
 
-import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
+import android.text.TextUtils;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
 
 import org.havenapp.main.sensors.motion.LuminanceMotionDetector;
+
+import java.io.File;
+import java.util.Date;
+import java.util.Objects;
 
 
 public class PreferenceManager {
@@ -49,16 +57,19 @@ public class PreferenceManager {
     public static final String CAMERA="camera";
     public static final String CAMERA_SENSITIVITY="camera_sensitivity";
     public static final String CONFIG_MOVEMENT ="config_movement";
+    public static final String HEARTBEAT_MONITOR_ACTIVE="heartbeat_monitor_active";
+    public static final String HEARTBEAT_MONITOR_DELAY="heartbeat_monitor_delay";
+    public static final String HEARTBEAT_MONITOR_MESSAGE="heartbeat_monitor_message";
+    public static final String MONITOR_SERVICE_ACTIVE="monitor_service_active";
     private static final String FLASH_ACTIVE="flash_active";
     private static final String MICROPHONE_ACTIVE="microphone_active";
     private static final String MICROPHONE_SENSITIVITY="microphone_sensitivity";
     public static final String CONFIG_SOUND = "config_sound";
     public static final String CONFIG_TIME_DELAY = "config_delay_time";
-    public static final String SMS_ACTIVE = "sms_active";
-    public static final String SMS_NUMBER = "sms_number";
     public static final String REGISTER_SIGNAL = "register_signal";
     public static final String VERIFY_SIGNAL = "verify_signal";
-    public static final String SEND_SMS = "send_sms";
+    public static final String VOICE_VERIFY_SIGNAL = "voice_verify_signal";
+    public static final String RESET_SIGNAL_CONFIG = "reset_signal_config";
     private static final String UNLOCK_CODE="unlock_code";
 	
     private static final String ACCESS_TOKEN="access_token";
@@ -75,6 +86,7 @@ public class PreferenceManager {
     public static final String REMOTE_ACCESS_CRED = "remote_access_credential";
 
     private static final String SIGNAL_USERNAME = "signal_username";
+    private static final String SIGNAL_VERIFIED_USERNAME = "signal_verified_username";
 
     private static final String FIRST_LAUNCH = "first_launch";
 
@@ -82,12 +94,22 @@ public class PreferenceManager {
 
     public static final String DISABLE_BATTERY_OPT = "config_battery_optimizations";
 
+    private static final String CURRENT_EVENT_START_TIME = "current_event_start_time";
+
+    public static final String CONFIG_BASE_STORAGE = "config_base_storage";
+    private static final String CONFIG_BASE_STORAGE_DEFAULT = "/haven";
+
+    // keeping the key value same for data migration.
+    static final String REMOTE_PHONE_NUMBER = "sms_number";
+    static final String REMOTE_NOTIFICATION_ACTIVE = "remote_notification_active";
+
     private Context context;
 	
     public PreferenceManager(Context context) {
         this.context = context;
-        this.appSharedPrefs = context.getSharedPreferences(APP_SHARED_PREFS, Activity.MODE_PRIVATE);
+        this.appSharedPrefs = context.getSharedPreferences(APP_SHARED_PREFS, AppCompatActivity.MODE_PRIVATE);
         this.prefsEditor = appSharedPrefs.edit();
+        prefsEditor.apply();
     }
 
     public boolean isFirstLaunch() {
@@ -99,6 +121,16 @@ public class PreferenceManager {
         prefsEditor.commit();
     }
 
+    /**
+     * Returns the Signal username registered. This may not be a good way to check for
+     * Signal set up since this may not be verified.
+     *
+     * Usages should be checked with {@link #isSignalVerified()}
+     *
+     * @see #isSignalVerified()
+     *
+     * @return the Signal username; null when nothing is set up
+     */
     public String getSignalUsername ()
     {
         return appSharedPrefs.getString(SIGNAL_USERNAME,null);
@@ -110,6 +142,37 @@ public class PreferenceManager {
         prefsEditor.commit();
     }
 
+    /**
+     * Returns the Signal username verified. This may not be a good way to check for
+     * Signal set up since this may invalidated by a call to register with a different username.
+     *
+     * Usages should be checked with {@link #isSignalVerified()}
+     *
+     * @see #isSignalVerified()
+     *
+     * @return the verified Signal username; null when no Signal username is verified even though registered.
+     */
+    @Nullable
+    public String getVerifiedSignalUsername() {
+        return appSharedPrefs.getString(SIGNAL_VERIFIED_USERNAME, null);
+    }
+
+    public void setVerifiedSignalUsername(String verifiedSignalUsername) {
+        prefsEditor.putString(SIGNAL_VERIFIED_USERNAME, verifiedSignalUsername);
+        prefsEditor.commit();
+    }
+
+    /**
+     * Checks if Signal is registered and verified for the Signal username returned by
+     * {@link #getSignalUsername()}
+     *
+     * @return true iff registered Signal username is same as that of the verified one.
+     */
+    public boolean isSignalVerified() {
+        return !TextUtils.isEmpty(getSignalUsername()) &&
+                getSignalUsername().equals(getVerifiedSignalUsername());
+    }
+
     public void activateRemoteAccess (boolean active) {
         prefsEditor.putBoolean(REMOTE_ACCESS_ACTIVE,active);
         prefsEditor.commit();
@@ -118,6 +181,16 @@ public class PreferenceManager {
     public boolean getRemoteAccessActive ()
     {
         return appSharedPrefs.getBoolean(REMOTE_ACCESS_ACTIVE,false);
+    }
+
+    public void activateMonitorService (boolean active) {
+        prefsEditor.putBoolean(MONITOR_SERVICE_ACTIVE,active);
+        prefsEditor.commit();
+    }
+
+    public boolean getMonitorServiceActive ()
+    {
+        return appSharedPrefs.getBoolean(MONITOR_SERVICE_ACTIVE,false);
     }
 
     public void setRemoteAccessOnion (String onionAddress) {
@@ -218,24 +291,24 @@ public class PreferenceManager {
     public String getMicrophoneSensitivity() {
     	return appSharedPrefs.getString(MICROPHONE_SENSITIVITY, MEDIUM);
     }
-    
-    public void activateSms(boolean active) {
-    	prefsEditor.putBoolean(SMS_ACTIVE, active);
-    	prefsEditor.commit();
-    }
-    
-    public boolean getSmsActivation() {
-    	return appSharedPrefs.getBoolean(SMS_ACTIVE, false);
-    }
-    
-    public void setSmsNumber(String number) {
 
-    	prefsEditor.putString(SMS_NUMBER, number);
-    	prefsEditor.commit();
+    public void setRemoteNotificationActive(boolean isRemoteNotificationActive) {
+        prefsEditor.putBoolean(REMOTE_NOTIFICATION_ACTIVE, isRemoteNotificationActive);
+        prefsEditor.apply();
     }
-    
-    public String getSmsNumber() {
-    	return appSharedPrefs.getString(SMS_NUMBER, "");
+
+    public boolean isRemoteNotificationActive() {
+        return appSharedPrefs.getBoolean(REMOTE_NOTIFICATION_ACTIVE, false);
+    }
+
+    public void setRemotePhoneNumber(@NonNull String remotePhoneNumber) {
+        prefsEditor.putString(REMOTE_PHONE_NUMBER, remotePhoneNumber.trim());
+        prefsEditor.apply();
+    }
+
+    @NonNull
+    public String getRemotePhoneNumber() {
+        return Objects.requireNonNull(appSharedPrefs.getString(REMOTE_PHONE_NUMBER, ""));
     }
 
     public int getTimerDelay ()
@@ -260,6 +333,15 @@ public class PreferenceManager {
         prefsEditor.commit();
     }
 
+    public void setVoiceVerification(boolean active) {
+        prefsEditor.putBoolean(VOICE_VERIFY_SIGNAL, active);
+        prefsEditor.commit();
+    }
+
+    public boolean getVoiceVerificationEnabled() {
+        return appSharedPrefs.getBoolean(VOICE_VERIFY_SIGNAL, false);
+    }
+
     public String getDirPath() {
     	return DIR_PATH;
     }
@@ -268,19 +350,23 @@ public class PreferenceManager {
         return context.getString(R.string.intrusion_detected);
     }
 
-    public String getImagePath ()
-    {
-        return "/phoneypot";
-    }
-
     public int getMaxImages ()
     {
         return 10;
     }
 
-    public String getAudioPath ()
+    public String getBaseStoragePath() {
+        return appSharedPrefs.getString(CONFIG_BASE_STORAGE,CONFIG_BASE_STORAGE_DEFAULT);
+    }
+
+    public String getDefaultMediaStoragePath() {
+        return appSharedPrefs.getString(CONFIG_BASE_STORAGE,CONFIG_BASE_STORAGE_DEFAULT) + File.separator + getCurrentSession(); //phoneypot is the old code name for Haven
+    }
+
+    public void setDefaultMediaStoragePath (String path)
     {
-        return "/phoneypot"; //phoneypot is the old code name for Haven
+        prefsEditor.putString(CONFIG_BASE_STORAGE,path);
+        prefsEditor.commit();
     }
 
     public int getAudioLength ()
@@ -297,4 +383,64 @@ public class PreferenceManager {
         prefsEditor.commit();
     }
 
+    public void activateHeartbeat(boolean active) {
+        prefsEditor.putBoolean(HEARTBEAT_MONITOR_ACTIVE, active);
+        prefsEditor.commit();
+    }
+
+    public void setHeartbeatMonitorNotifications (int notificationTimeMs) {
+        prefsEditor.putInt(HEARTBEAT_MONITOR_DELAY,notificationTimeMs);
+        prefsEditor.commit();
+    }
+
+    public boolean getHeartbeatActive() {
+        return appSharedPrefs.getBoolean(HEARTBEAT_MONITOR_ACTIVE, false);
+    }
+
+    public int getHeartbeatNotificationTimeMs () {
+        return appSharedPrefs.getInt(HEARTBEAT_MONITOR_DELAY,300000);
+    }
+
+    public String getHeartbeatMonitorMessage ()
+    {
+        return appSharedPrefs.getString(HEARTBEAT_MONITOR_MESSAGE,null);
+    }
+
+    public void setHeartbeatMonitorMessage (String hearbeatMessage)
+    {
+        prefsEditor.putString(HEARTBEAT_MONITOR_MESSAGE, hearbeatMessage);
+        prefsEditor.commit();
+    }
+
+    public String getHeartbeatPrefix() {
+        return context.getString(R.string.hearbeat_monitor_initial_message_1);
+    }
+
+    public String getHeartbeatSuffix() {
+        return context.getString(R.string.hearbeat_monitor_initial_message_2);
+    }
+
+
+    /**
+     * Set the {@link org.havenapp.main.model.Event#startTime} for the ongoing event.
+     * Sets a string with the format {@link Utils#DATE_TIME_PATTERN}
+     * representing current date and time for the key {@link #CURRENT_EVENT_START_TIME}.
+     *
+     * @param startTime the {@link org.havenapp.main.model.Event#startTime} for an
+     * {@link org.havenapp.main.model.Event}
+     */
+    public void setCurrentSession(Date startTime) {
+        prefsEditor.putString(CURRENT_EVENT_START_TIME, Utils.getDateTime(startTime));
+        prefsEditor.commit();
+    }
+
+    /**
+     * Get the {@link org.havenapp.main.model.Event#startTime} for the ongoing event.
+     *
+     * @return the string corresponding to pref key {@link #CURRENT_EVENT_START_TIME}.
+     * Default value is unknown_session.
+     */
+    private String getCurrentSession() {
+        return appSharedPrefs.getString(CURRENT_EVENT_START_TIME, "unknown_session");
+    }
 }

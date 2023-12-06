@@ -20,13 +20,10 @@ package org.havenapp.main;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.v7.app.AppCompatActivity;
+import android.view.View;
 
-import java.io.File;
-import java.util.ArrayList;
-
-import info.guardianproject.netcipher.proxy.OrbotHelper;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
 
 public class SettingsActivity extends AppCompatActivity {
 
@@ -43,6 +40,8 @@ public class SettingsActivity extends AppCompatActivity {
             getSupportFragmentManager().beginTransaction()
                     .add(R.id.settings_fragment, mFragment)
                     .commit();
+        } else {
+            mFragment = (SettingsFragment) getSupportFragmentManager().findFragmentById(R.id.settings_fragment);
         }
 
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
@@ -61,5 +60,9 @@ public class SettingsActivity extends AppCompatActivity {
     @Override
     public void onBackPressed() {
        mFragment.save();
+    }
+
+    public void switchClickListener(View view) {
+        mFragment.checkCallToVerify(view);
     }
 }

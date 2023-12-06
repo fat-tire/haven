@@ -6,17 +6,23 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import org.havenapp.main.R;
+import org.havenapp.main.Utils;
+import org.havenapp.main.database.HavenEventDB;
 import org.havenapp.main.model.Event;
 import org.havenapp.main.model.EventTrigger;
+import org.havenapp.main.resources.ResourceManager;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
+import java.text.SimpleDateFormat;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import fi.iki.elonen.NanoHTTPD;
@@ -91,10 +97,11 @@ public class WebServer extends NanoHTTPD {
             //long eventId = Long.parseLong(pathSegs.get(1));
 
             long eventTriggerId = Long.parseLong(pathSegs.get(3));
-            EventTrigger eventTrigger = EventTrigger.findById(EventTrigger.class, eventTriggerId);
+            EventTrigger eventTrigger = HavenEventDB.getDatabase(mContext).getEventTriggerDAO()
+                    .findById(eventTriggerId);
 
             try {
-                File fileMedia = new File(eventTrigger.getPath());
+                File fileMedia = new File(Objects.requireNonNull(eventTrigger.getPath()));
                 FileInputStream fis = new FileInputStream(fileMedia);
                 return newChunkedResponse(Response.Status.OK, getMimeType(eventTrigger), fis);
 
@@ -102,6 +109,8 @@ public class WebServer extends NanoHTTPD {
             catch (IOException ioe)
             {
                 Log.e(TAG,"unable to return media file",ioe);
+            } catch (NullPointerException npe) {
+                Log.e(TAG,"unable to return media file", npe);
             }
         }
         else if (uri.getPath().startsWith("/feed"))
@@ -121,7 +130,8 @@ public class WebServer extends NanoHTTPD {
                 try {
                     if (pathSegs.size() == 2 && pathSegs.get(0).equals("event")) {
                         long eventId = Long.parseLong(pathSegs.get(1));
-                        Event event = Event.findById(Event.class, eventId);
+                        Event event = HavenEventDB.getDatabase(mContext)
+                                .getEventDAO().findById(eventId);
                         showEvent(event, page);
 
                     }
@@ -168,8 +178,9 @@ public class WebServer extends NanoHTTPD {
 
         for (EventTrigger eventTrigger: triggers)
         {
-            String title = eventTrigger.getStringType(mContext);
-            String desc = eventTrigger.getTriggerTime().toString();
+            String title = eventTrigger.getStringType(new ResourceManager(mContext));
+            String desc = new SimpleDateFormat(Utils.DATE_TIME_PATTERN,
+                    Locale.getDefault()).format(eventTrigger.getTime());
 
             page.append("<b>");
             page.append(title).append("</b><br/>");
@@ -188,9 +199,10 @@ public class WebServer extends NanoHTTPD {
                 page.append("<audio src=\"").append(mediaPath).append("\"></audio>");
                 page.append("<a href=\"").append(mediaPath).append("\">Download Media").append("</a>");
 
+            } else if (eventTrigger.getType() == EventTrigger.CAMERA_VIDEO) {
+                page.append("<video src=\"").append(mediaPath).append("\"></video>");
+                page.append("<a href=\"").append(mediaPath).append("\">Download Media").append("</a>");
             }
-
-
             page.append("<hr/>");
         }
 
@@ -202,7 +214,7 @@ public class WebServer extends NanoHTTPD {
     {
         page.append("<h1>Events</h1><hr/>\n");
 
-        List<Event> events = Event.listAll(Event.class);
+        List<Event> events = HavenEventDB.getDatabase(mContext).getEventDAO().getAllEvent();
 
         for (Event event: events)
         {
@@ -228,6 +240,9 @@ public class WebServer extends NanoHTTPD {
             case EventTrigger.MICROPHONE:
                 sType = "audio/mp4";
                 break;
+            case EventTrigger.CAMERA_VIDEO:
+                sType = "video/*";
+                break;
             default:
                 sType = null;
         }
@@ -242,7 +257,7 @@ public class WebServer extends NanoHTTPD {
         return MessageDigest.isEqual(aByteArray, bByteArray);
     }
 
-    class OnionCookie extends Cookie
+    static class OnionCookie extends Cookie
     {
 
         public OnionCookie(String name, String value, int numDays) {

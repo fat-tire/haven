@@ -3,6 +3,7 @@ package org.havenapp.main.sensors.media;
 import android.hardware.Camera;
 import android.media.MediaRecorder;
 import android.util.Log;
+import android.view.SurfaceHolder;
 
 import java.io.IOException;
 
@@ -16,11 +17,13 @@ public class MediaRecorderTask  {
     private android.media.MediaRecorder mMediaRecorder;
     private Camera mCamera;
     private int mSeconds;
+    private SurfaceHolder mHolder;
 
-    public MediaRecorderTask(Camera camera, String fileImageDir, int seconds) {
+    public MediaRecorderTask(Camera camera, String fileImageDir, int seconds, SurfaceHolder holder) {
         mCamera = camera;
         mOutputFile = fileImageDir;
         mSeconds = seconds;
+        mHolder = holder;
         if(prepare(mCamera)){
             Log.d("Done", "Media Recorder prepared");
         } else {
@@ -39,10 +42,11 @@ public class MediaRecorderTask  {
         mMediaRecorder = new MediaRecorder();
         mCamera.unlock();
         mMediaRecorder.setCamera(mCamera);
-        mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+        mMediaRecorder.setPreviewDisplay(mHolder.getSurface());
+        mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.DEFAULT);
         mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.DEFAULT);
         mMediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-        mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
+        mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.DEFAULT);
         mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.MPEG_4_SP);
         mMediaRecorder.setMaxDuration(mSeconds);
         mMediaRecorder.setOutputFile(mOutputFile);
