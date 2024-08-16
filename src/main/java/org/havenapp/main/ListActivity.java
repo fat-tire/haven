@@ -362,8 +362,6 @@ public class ListActivity extends AppCompatActivity {
     private void showLicenses ()
     {
         new LibsBuilder()
-                //provide a style (optional) (LIGHT, DARK, LIGHT_DARK_TOOLBAR)
-                .withActivityStyle(Libs.ActivityStyle.LIGHT_DARK_TOOLBAR)
                 .withAboutIconShown(true)
                 .withAboutVersionShown(true)
                 .withAboutAppName(resourceManager.getString(R.string.app_name))
